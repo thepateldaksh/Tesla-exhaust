@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Rupteur Audio Cockpit</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,400;0,600;0,700;1,700&family=JetBrains+Mono:wght@400;600;800&display=swap');
+    
+    body {
+      font-family: 'JetBrains Mono', monospace;
+      background-color: #050505;
+      color: #f3f4f6;
+      touch-action: manipulation;
+    }
+    .font-chakra {
+      font-family: 'Chakra Petch', sans-serif;
+    }
+    .carbon-bg {
+      background: radial-gradient(circle at 50% 50%, #15161b 0%, #08080a 100%);
+    }
+    .gauge-glow {
+      filter: drop-shadow(0 0 16px var(--accent-glow));
+    }
+    .btn-glow {
+      box-shadow: 0 0 35px var(--accent-glow);
+    }
+    input[type=range] {
+      -webkit-appearance: none;
+      background: #1f2937;
+      border-radius: 9999px;
+      height: 10px;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      height: 26px;
+      width: 26px;
+      border-radius: 50%;
+      background: var(--accent-color);
+      cursor: pointer;
+      box-shadow: 0 0 12px var(--accent-glow);
+    }
+  </style>
+</head>
+<body class="carbon-bg min-h-screen flex flex-col justify-between p-4 md:p-8 select-none" style="--accent-color: #3b82f6; --accent-glow: rgba(59, 130, 246, 0.4);">
+
+  <!-- Top Header / Telemetry Bar -->
+  <header class="w-full max-w-4xl mx-auto flex justify-between items-center border-b border-neutral-800 pb-4">
+    <div>
+      <div class="flex items-center gap-2">
+        <span class="text-xs uppercase tracking-widest text-neutral-500 font-semibold">Active Vehicle</span>
+        <span id="badge-engine-type" class="text-[10px] px-2 py-0.5 rounded bg-blue-950/80 text-blue-400 border border-blue-800">S63 Twin-Turbo</span>
+      </div>
+      <h1 id="car-title" class="text-xl md:text-2xl font-bold font-chakra tracking-wide text-white">BMW M5 CS (F90)</h1>
+      <p id="car-spec" class="text-xs text-neutral-400">4.4L Twin-Turbo V8 • 627 HP • 70% Engine / 30% Exhaust</p>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2 bg-neutral-900/80 px-3 py-1.5 rounded-lg border border-neutral-800 text-xs">
+        <span id="gps-indicator" class="h-2.5 w-2.5 rounded-full bg-amber-500"></span>
+        <span id="gps-status" class="text-neutral-300 font-medium">GPS STANDBY</span>
+      </div>
+
+      <button id="btn-unit" class="px-3 py-1.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-neutral-300 text-xs rounded-lg font-bold transition">
+        MPH
+      </button>
+    </div>
+  </header>
+
+  <!-- Central Cluster -->
+  <main class="w-full max-w-4xl mx-auto flex flex-col items-center justify-center my-auto py-6">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-center w-full">
+      
+      <!-- Left Telemetry Readout -->
+      <div class="hidden md:flex flex-col gap-4 text-xs text-neutral-400 bg-neutral-900/40 p-4 rounded-xl border border-neutral-800/80">
+        <div>
+          <div class="text-[10px] uppercase text-neutral-500 font-semibold tracking-wider">Acoustic Balance</div>
+          <div class="text-sm font-bold text-neutral-200 mt-0.5">70% Engine / 30% Exhaust</div>
+          <div class="text-[11px] text-neutral-500">Mechanical Valvetrain & Induction Bias</div>
+        </div>
+        <div class="border-t border-neutral-800 pt-3">
+          <div class="text-[10px] uppercase text-neutral-500 font-semibold tracking-wider">Gearbox Mode</div>
+          <div class="text-sm font-bold text-neutral-200 mt-0.5">Hands-Free Automatic</div>
+          <div class="text-[11px] text-neutral-500">Dynamic Auto-Upshifting & Downshift Blip</div>
+        </div>
+        <div class="border-t border-neutral-800 pt-3">
+          <div class="text-[10px] uppercase text-neutral-500 font-semibold tracking-wider">Telemetry Source</div>
+          <div id="telemetry-src" class="text-sm font-bold text-neutral-300 mt-0.5">Virtual / GPS Auto</div>
+        </div>
+      </div>
+
+      <!-- Center Gauge / Speedometer -->
+      <div class="flex flex-col items-center justify-center">
+        <div class="relative flex flex-col items-center justify-center">
+          <div class="text-8xl md:text-9xl font-extrabold font-chakra tracking-tight gauge-glow transition-colors duration-200" id="speed-display" style="color: var(--accent-color);">
+            0
+          </div>
+          <div id="unit-label" class="text-sm md:text-base font-bold tracking-widest text-neutral-400 -mt-2">
+            MPH
+          </div>
+        </div>
+
+        <!-- Gear & RPM Indicators -->
+        <div class="flex items-center gap-6 mt-4">
+          <div class="text-center">
+            <span class="text-[10px] text-neutral-500 block uppercase font-bold tracking-wider">Gear</span>
+            <span id="gear-display" class="text-2xl font-bold font-chakra text-white">1</span>
+          </div>
+          <div class="h-8 w-px bg-neutral-800"></div>
+          <div class="text-center">
+            <span class="text-[10px] text-neutral-500 block uppercase font-bold tracking-wider">RPM</span>
+            <span id="rpm-display" class="text-2xl font-bold font-chakra text-white">0</span>
+          </div>
+        </div>
+
+        <!-- Start/Stop Ignition Switch -->
+        <button id="btn-ignition" class="mt-8 w-36 h-36 rounded-full border-4 font-chakra font-bold text-sm tracking-wider flex flex-col items-center justify-center transition-all duration-300 active:scale-95 border-emerald-500 bg-emerald-950/30 text-emerald-400 hover:bg-emerald-900/40">
+          <span id="ignition-text" class="text-base font-black">START</span>
+          <span class="text-[10px] tracking-widest text-neutral-400 mt-0.5">ENGINE</span>
+        </button>
+      </div>
+
+      <!-- Right Gauge: Dynamic Tachometer Arc & Overrun Status -->
+      <div class="flex flex-col items-center justify-center bg-neutral-900/40 p-4 rounded-xl border border-neutral-800/80 w-full">
+        <div class="w-full flex justify-between text-xs text-neutral-400 mb-1">
+          <span>TACHOMETER</span>
+          <span id="redline-label" class="text-red-400 font-bold">7200 RPM</span>
+        </div>
+
+        <div class="w-full bg-neutral-950 h-5 rounded-full overflow-hidden border border-neutral-800 relative">
+          <div id="tach-bar" class="h-full w-0 transition-all duration-75" style="background-color: var(--accent-color);"></div>
+        </div>
+
+        <!-- Throttle Input / Dyno Slider -->
+        <div class="w-full mt-6 flex flex-col gap-2">
+          <div class="flex justify-between items-center text-xs text-neutral-400">
+            <span class="font-bold tracking-wider">DYNO / VIRTUAL THROTTLE</span>
+            <span id="throttle-val" class="font-bold text-white">0%</span>
+          </div>
+          <input type="range" id="dyno-slider" min="0" max="100" value="0" disabled class="w-full cursor-pointer disabled:opacity-30">
+          <p class="text-[10px] text-neutral-500 text-center mt-1">Use slider to bench test while parked</p>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Bottom Car Switcher Bar -->
+  <footer class="w-full max-w-4xl mx-auto pt-4 border-t border-neutral-800">
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3" id="car-selector">
+      <!-- Buttons dynamically populated -->
+    </div>
+  </footer>
+
+  <script>
+    // Car profiles with 70% Engine / 30% Exhaust configuration
+    const CARS = [
+      {
+        id: 'm5',
+        name: 'BMW M5 CS (F90)',
+        spec: '4.4L Twin-Turbo V8 • 627 HP',
+        badge: 'S63 Twin-Turbo',
+        cylinders: 8,
+        idleRpm: 800,
+        redlineRpm: 7200,
+        maxSpeedMph: 190,
+        ratios: [5.0, 3.2, 2.14, 1.72, 1.31, 1.0, 0.82, 0.64],
+        color: '#3b82f6',
+        glow: 'rgba(59, 130, 246, 0.4)',
+        clatterGain: 0.28,
+        turbo: true
+      },
+      {
+        id: 'r8',
+        name: 'Audi R8 V10 Plus',
+        spec: '5.2L FSI V10 • 602 HP',
+        badge: '5.2L V10 NA',
+        cylinders: 10,
+        idleRpm: 900,
+        redlineRpm: 8700,
+        maxSpeedMph: 205,
+        ratios: [3.9, 2.6, 1.9, 1.5, 1.2, 0.95, 0.78],
+        color: '#ef4444',
+        glow: 'rgba(239, 68, 68, 0.4)',
+        clatterGain: 0.38,
+        turbo: false
+      },
+      {
+        id: 'svj',
+        name: 'Lamborghini Aventador SVJ',
+        spec: '6.5L L539 V12 • 759 HP',
+        badge: '6.5L V12 Screamer',
+        cylinders: 12,
+        idleRpm: 1000,
+        redlineRpm: 8900,
+        maxSpeedMph: 217,
+        ratios: [3.9, 2.4, 1.8, 1.4, 1.15, 0.92, 0.75],
+        color: '#84cc16',
+        glow: 'rgba(132, 204, 22, 0.4)',
+        clatterGain: 0.42,
+        turbo: false
+      },
+      {
+        id: 'gt3rs',
+        name: 'Porsche 911 GT3 RS',
+        spec: '4.0L Boxer-6 • 518 HP',
+        badge: '4.0L Flat-6 NA',
+        cylinders: 6,
+        idleRpm: 950,
+        redlineRpm: 9000,
+        maxSpeedMph: 184,
+        ratios: [4.1, 2.8, 2.1, 1.6, 1.3, 1.05, 0.85],
+        color: '#10b981',
+        glow: 'rgba(16, 185, 129, 0.4)',
+        clatterGain: 0.48,
+        turbo: false
+      }
+    ];
+
+    let currentCar = CARS[0];
+    let isRunning = false;
+    let isStarting = false;
+    let currentRpm = 0;
+    let speedMph = 0;
+    let currentGear = 1;
+    let throttle = 0;
+    let useMetric = false;
+    let gpsActive = false;
+
+    let lastGpsSpeed = 0;
+    let lastGpsTime = Date.now();
+
+    // Web Audio Core
+    let audioCtx = null;
+    let masterGain = null;
+    let engineBus = null;
+    let exhaustBus = null;
+
+    let primarySaw = null;
+    let secondarySaw = null;
+    let subOsc = null;
+    let clatterSource = null;
+    let turboWhistle = null;
+    let turboGain = null;
+
+    let intakeFilter = null;
+    let raspFilter = null;
+    let subFilter = null;
+
+    function createDistortionCurve(amount = 25) {
+      const n = 256;
+      const curve = new Float32Array(n);
+      for (let i = 0; i < n; ++i) {
+        const x = (i * 2) / n - 1;
+        curve[i] = ((Math.PI + amount) * x) / (Math.PI + amount * Math.abs(x));
+      }
+      return curve;
+    }
+
+    async function initAudioGraph() {
+      destroyAudioGraph();
+      const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new AudioCtxClass();
+      if (audioCtx.state === 'suspended') {
+        await audioCtx.resume();
+      }
+
+      const t = audioCtx.currentTime;
+
+      // Master Gain
+      masterGain = audioCtx.createGain();
+      masterGain.gain.setValueAtTime(0.85, t);
+      masterGain.connect(audioCtx.destination);
+
+      // 70% Engine Mechanical Bus
+      engineBus = audioCtx.createGain();
+      engineBus.gain.setValueAtTime(0.70, t);
+      engineBus.connect(masterGain);
+
+      // 30% Exhaust Resonance Bus
+      exhaustBus = audioCtx.createGain();
+      exhaustBus.gain.setValueAtTime(0.30, t);
+      exhaustBus.connect(masterGain);
+
+      // Oscillators (Sawtooth Firing Pulses)
+      primarySaw = audioCtx.createOscillator();
+      primarySaw.type = 'sawtooth';
+
+      secondarySaw = audioCtx.createOscillator();
+      secondarySaw.type = 'triangle';
+
+      // Exhaust Rasp Waveshaper
+      const raspShaper = audioCtx.createWaveShaper();
+      raspShaper.curve = createDistortionCurve(25);
+      raspShaper.oversample = '2x';
+
+      raspFilter = audioCtx.createBiquadFilter();
+      raspFilter.type = 'bandpass';
+      raspFilter.Q.setValueAtTime(3.5, t);
+
+      primarySaw.connect(raspShaper);
+      raspShaper.connect(raspFilter);
+      raspFilter.connect(exhaustBus);
+
+      // Subharmonic Compression Thump
+      subOsc = audioCtx.createOscillator();
+      subOsc.type = 'sine';
+      subFilter = audioCtx.createBiquadFilter();
+      subFilter.type = 'lowpass';
+      subFilter.frequency.setValueAtTime(80, t);
+
+      subOsc.connect(subFilter);
+      subFilter.connect(exhaustBus);
+
+      // Intake Induction Roar (Engine Bus)
+      intakeFilter = audioCtx.createBiquadFilter();
+      intakeFilter.type = 'peaking';
+      intakeFilter.Q.setValueAtTime(2.2, t);
+      intakeFilter.gain.setValueAtTime(9.0, t);
+
+      secondarySaw.connect(intakeFilter);
+      intakeFilter.connect(engineBus);
+
+      // Valvetrain & Injector Mechanical Clatter (Noise)
+      const bufferSize = audioCtx.sampleRate * 2;
+      const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+      const data = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * 0.15;
+      }
+
+      clatterSource = audioCtx.createBufferSource();
+      clatterSource.buffer = noiseBuffer;
+      clatterSource.loop = true;
+
+      const clatterFilter = audioCtx.createBiquadFilter();
+      clatterFilter.type = 'highpass';
+      clatterFilter.frequency.setValueAtTime(3400, t);
+
+      const clatterGain = audioCtx.createGain();
+      clatterGain.gain.setValueAtTime(currentCar.clatterGain, t);
+
+      clatterSource.connect(clatterFilter);
+      clatterFilter.connect(clatterGain);
+      clatterGain.connect(engineBus);
+
+      // Twin-Turbo Compressor Whistle
+      if (currentCar.turbo) {
+        turboWhistle = audioCtx.createOscillator();
+        turboWhistle.type = 'sine';
+        turboGain = audioCtx.createGain();
+        turboGain.gain.setValueAtTime(0.0, t);
+        turboWhistle.connect(turboGain);
+        turboGain.connect(engineBus);
+        turboWhistle.start(t);
+      }
+
+      primarySaw.start(t);
+      secondarySaw.start(t);
+      subOsc.start(t);
+      clatterSource.start(t);
+    }
+
+    function destroyAudioGraph() {
+      if (primarySaw) { try { primarySaw.stop(); } catch(e){} primarySaw = null; }
+      if (secondarySaw) { try { secondarySaw.stop(); } catch(e){} secondarySaw = null; }
+      if (subOsc) { try { subOsc.stop(); } catch(e){} subOsc = null; }
+      if (clatterSource) { try { clatterSource.stop(); } catch(e){} clatterSource = null; }
+      if (turboWhistle) { try { turboWhistle.stop(); } catch(e){} turboWhistle = null; }
+      if (audioCtx) { try { audioCtx.close(); } catch(e){} audioCtx = null; }
+    }
+
+    function updateAudio(rpm, thr) {
+      if (!audioCtx || !isRunning) return;
+      const t = audioCtx.currentTime;
+
+      const fundamentalFreq = (rpm / 60) * (currentCar.cylinders / 2);
+
+      primarySaw?.frequency.setTargetAtTime(fundamentalFreq, t, 0.03);
+      secondarySaw?.frequency.setTargetAtTime(fundamentalFreq * 0.5, t, 0.03);
+      subOsc?.frequency.setTargetAtTime(Math.max(26, fundamentalFreq * 0.25), t, 0.03);
+
+      const intakeFreq = 200 + (rpm / currentCar.redlineRpm) * 550 + thr * 300;
+      intakeFilter?.frequency.setTargetAtTime(intakeFreq, t, 0.03);
+
+      const raspFreq = 700 + (rpm / currentCar.redlineRpm) * 1600;
+      raspFilter?.frequency.setTargetAtTime(raspFreq, t, 0.03);
+
+      if (turboWhistle && turboGain) {
+        const turboFreq = 1600 + (rpm / currentCar.redlineRpm) * 4800;
+        turboWhistle.frequency.setTargetAtTime(turboFreq, t, 0.05);
+        turboGain.gain.setTargetAtTime(thr * 0.14, t, 0.08);
+      }
+    }
+
+    function triggerExhaustPop() {
+      if (!audioCtx || !isRunning) return;
+      const t = audioCtx.currentTime;
+
+      const popOsc = audioCtx.createOscillator();
+      const popGain = audioCtx.createGain();
+      const popFilter = audioCtx.createBiquadFilter();
+
+      popOsc.type = 'square';
+      popOsc.frequency.setValueAtTime(140, t);
+      popOsc.frequency.exponentialRampToValueAtTime(30, t + 0.12);
+
+      popFilter.type = 'lowpass';
+      popFilter.frequency.setValueAtTime(300, t);
+
+      popGain.gain.setValueAtTime(0.85, t);
+      popGain.gain.exponentialRampToValueAtTime(0.01, t + 0.14);
+
+      popOsc.connect(popFilter);
+      popFilter.connect(popGain);
+      popGain.connect(masterGain);
+
+      popOsc.start(t);
+      popOsc.stop(t + 0.15);
+    }
+
+    // Starter Motor Crank Sequence
+    async function startEngineSequence() {
+      if (isStarting || isRunning) return;
+      isStarting = true;
+
+      const btn = document.getElementById('btn-ignition');
+      const text = document.getElementById('ignition-text');
+      btn.className = "mt-8 w-36 h-36 rounded-full border-4 font-chakra font-bold text-sm tracking-wider flex flex-col items-center justify-center transition-all border-amber-500 bg-amber-950/30 text-amber-400 animate-pulse";
+      text.textContent = "CRANKING";
+
+      await initAudioGraph();
+
+      // Crank pulses
+      for (let i = 0; i < 3; i++) {
+        currentRpm = 350 + Math.random() * 50;
+        updateAudio(currentRpm, 0);
+        updateUI();
+        await new Promise(r => setTimeout(r, 120));
+      }
+
+      // Ignition flare
+      currentRpm = currentCar.idleRpm + 1400;
+      updateAudio(currentRpm, 0.5);
+      triggerExhaustPop();
+      updateUI();
+      await new Promise(r => setTimeout(r, 450));
+
+      // Settle to idle
+      currentRpm = currentCar.idleRpm;
+      updateAudio(currentRpm, 0);
+      isRunning = true;
+      isStarting = false;
+
+      btn.className = "mt-8 w-36 h-36 rounded-full border-4 font-chakra font-bold text-sm tracking-wider flex flex-col items-center justify-center transition-all active:scale-95 border-red-600 bg-red-950/30 text-red-400 hover:bg-red-900/40 btn-glow";
+      text.textContent = "STOP";
+      document.getElementById('dyno-slider').disabled = false;
+      updateUI();
+    }
+
+    function stopEngine() {
+      isRunning = false;
+      isStarting = false;
+      destroyAudioGraph();
+      currentRpm = 0;
+      speedMph = 0;
+      throttle = 0;
+      currentGear = 1;
+
+      const btn = document.getElementById('btn-ignition');
+      const text = document.getElementById('ignition-text');
+      btn.className = "mt-8 w-36 h-36 rounded-full border-4 font-chakra font-bold text-sm tracking-wider flex flex-col items-center justify-center transition-all active:scale-95 border-emerald-500 bg-emerald-950/30 text-emerald-400 hover:bg-emerald-900/40";
+      text.textContent = "START";
+      document.getElementById('dyno-slider').value = 0;
+      document.getElementById('dyno-slider').disabled = true;
+      document.getElementById('throttle-val').textContent = "0%";
+      updateUI();
+    }
+
+    // UI Updates
+    function updateUI() {
+      const displayVal = useMetric ? Math.round(speedMph * 1.60934) : Math.round(speedMph);
+      document.getElementById('speed-display').textContent = displayVal;
+      document.getElementById('gear-display').textContent = currentGear;
+      document.getElementById('rpm-display').textContent = Math.round(currentRpm);
+
+      const tachPct = Math.min(100, (currentRpm / currentCar.redlineRpm) * 100);
+      const tachBar = document.getElementById('tach-bar');
+      tachBar.style.width = tachPct + '%';
+      tachBar.style.backgroundColor = currentRpm > (currentCar.redlineRpm - 500) ? '#ef4444' : currentCar.color;
+    }
+
+    // Car Selector Rendering
+    function renderCarSelector() {
+      const container = document.getElementById('car-selector');
+      container.innerHTML = '';
+      CARS.forEach(car => {
+        const btn = document.createElement('button');
+        const isActive = car.id === currentCar.id;
+        btn.className = `p-2.5 rounded-lg border text-left text-xs transition-all ${
+          isActive 
+            ? 'border-neutral-200 bg-neutral-900 font-semibold text-white' 
+            : 'border-neutral-800 bg-neutral-950 text-neutral-500 hover:border-neutral-700'
+        }`;
+        btn.innerHTML = `<div class="truncate font-bold">${car.name}</div><div class="text-[10px] text-neutral-500">${car.badge}</div>`;
+        btn.onclick = () => selectCar(car);
+        container.appendChild(btn);
+      });
+    }
+
+    function selectCar(car) {
+      currentCar = car;
+      document.documentElement.style.setProperty('--accent-color', car.color);
+      document.documentElement.style.setProperty('--accent-glow', car.glow);
+
+      document.getElementById('car-title').textContent = car.name;
+      document.getElementById('car-spec').textContent = car.spec;
+      document.getElementById('badge-engine-type').textContent = car.badge;
+      document.getElementById('redline-label').textContent = `${car.redlineRpm} RPM`;
+
+      renderCarSelector();
+
+      if (isRunning) {
+        initAudioGraph();
+      }
+    }
+
+    // Dyno Slider Listener
+    document.getElementById('dyno-slider').addEventListener('input', (e) => {
+      throttle = parseFloat(e.target.value) / 100;
+      document.getElementById('throttle-val').textContent = `${Math.round(throttle * 100)}%`;
+      document.getElementById('telemetry-src').textContent = "Dyno (Virtual)";
+      speedMph = throttle * (currentCar.maxSpeedMph * 0.75);
+    });
+
+    // Ignition Click
+    document.getElementById('btn-ignition').addEventListener('click', () => {
+      if (isRunning) stopEngine();
+      else startEngineSequence();
+    });
+
+    // Unit Toggle
+    document.getElementById('btn-unit').addEventListener('click', () => {
+      useMetric = !useMetric;
+      document.getElementById('btn-unit').textContent = useMetric ? 'KM/H' : 'MPH';
+      document.getElementById('unit-label').textContent = useMetric ? 'KM/H' : 'MPH';
+      updateUI();
+    });
+
+    // GPS Tracking
+    if ('geolocation' in navigator) {
+      navigator.geolocation.watchPosition(
+        (pos) => {
+          gpsActive = true;
+          document.getElementById('gps-indicator').className = "h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse";
+          document.getElementById('gps-status').textContent = "GPS LOCKED";
+
+          const rawMps = pos.coords.speed || 0;
+          const calculatedMph = Math.max(0, rawMps * 2.23694);
+
+          const now = Date.now();
+          const dt = (now - lastGpsTime) / 1000;
+          const dv = calculatedMph - lastGpsSpeed;
+
+          // If vehicle is moving, use GPS throttle estimation
+          if (calculatedMph > 1) {
+            throttle = dt > 0 ? Math.min(1, Math.max(0, (dv / dt) * 0.35)) : 0;
+            speedMph = calculatedMph;
+            document.getElementById('telemetry-src').textContent = "Live GPS Active";
+            document.getElementById('dyno-slider').value = Math.round(throttle * 100);
+            document.getElementById('throttle-val').textContent = `${Math.round(throttle * 100)}%`;
+          }
+
+          lastGpsSpeed = calculatedMph;
+          lastGpsTime = now;
+        },
+        () => {
+          gpsActive = false;
+          document.getElementById('gps-indicator').className = "h-2.5 w-2.5 rounded-full bg-amber-500";
+          document.getElementById('gps-status').textContent = "GPS STANDBY";
+        },
+        { enableHighAccuracy: true, maximumAge: 500, timeout: 5000 }
+      );
+    }
+
+    // Hands-Free Automatic Transmission & Main Animation Loop
+    function mainLoop() {
+      if (isRunning) {
+        const totalGears = currentCar.ratios.length;
+        let gear = 1;
+
+        // Auto shift thresholds
+        for (let g = 0; g < totalGears; g++) {
+          const shiftSpeed = ((g + 1) / totalGears) * currentCar.maxSpeedMph * 0.95;
+          if (speedMph > shiftSpeed && g + 1 < totalGears) {
+            gear = g + 2;
+          }
+        }
+
+        // Detect auto upshift pop
+        if (gear !== currentGear && gear > currentGear) {
+          triggerExhaustPop();
+        }
+        currentGear = gear;
+
+        // Realistic RPM calculation
+        const speedRatio = speedMph / (currentCar.maxSpeedMph / totalGears);
+        let targetRpm = currentCar.idleRpm + (speedRatio % 1.0) * (currentCar.redlineRpm - currentCar.idleRpm) + (throttle * 1400);
+
+        if (targetRpm >= currentCar.redlineRpm) {
+          targetRpm = currentCar.redlineRpm;
+          if (Math.random() < 0.15) triggerExhaustPop();
+        }
+
+        // RPM smoothing
+        currentRpm += (targetRpm - currentRpm) * 0.12;
+        updateAudio(currentRpm, throttle);
+        updateUI();
+      }
+      requestAnimationFrame(mainLoop);
+    }
+
+    // Initialize UI
+    renderCarSelector();
+    selectCar(CARS[0]);
+    requestAnimationFrame(mainLoop);
+  </script>
+</body>
+</html>
